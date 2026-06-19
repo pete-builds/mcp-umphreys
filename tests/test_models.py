@@ -101,6 +101,7 @@ def test_song_summary_field_set() -> None:
         "artist",
         "original",
         "times_played",
+        "gap",
     }
 
 

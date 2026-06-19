@@ -210,7 +210,7 @@ class VaultReader:
                 await conn.fetch(
                     """
                     SELECT slug, title, alias, original, original_artist,
-                           times_played
+                           times_played, gap_current
                     FROM   songs
                     WHERE  title ILIKE $1
                        OR  alias ILIKE $1

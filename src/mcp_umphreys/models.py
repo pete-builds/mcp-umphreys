@@ -115,7 +115,12 @@ class Show(BaseModel):
 
 
 class SongSummary(BaseModel):
-    """Lightweight song record for search results."""
+    """Lightweight song record for search results.
+
+    Carries ``gap`` (shows since last play) so a caller can show a "last
+    played N shows ago" hint in a picker without a second ``get_song`` round
+    trip. ``None`` when the song has never been played (no gap to report).
+    """
 
     model_config = _FROZEN
 
@@ -124,6 +129,7 @@ class SongSummary(BaseModel):
     artist: str | None = None
     original: bool = True
     times_played: int = 0
+    gap: int | None = None
 
 
 class Song(BaseModel):

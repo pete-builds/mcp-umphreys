@@ -311,7 +311,7 @@ def vault_server(stub_settings: Settings) -> Any:
 
 _MODEL_KEYS = {
     "ShowSummary": {"show_id", "date", "venue_name", "location", "tour_name"},
-    "SongSummary": {"slug", "title", "artist", "original", "times_played"},
+    "SongSummary": {"slug", "title", "artist", "original", "times_played", "gap"},
     "Song": {
         "slug",
         "title",

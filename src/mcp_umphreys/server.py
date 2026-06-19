@@ -286,12 +286,14 @@ def _vault_song_summary(row: Any) -> SongSummary:
     # source (`original_artist`) when the song is a cover, else None.
     is_original = bool(row.get("original", True))
     artist = row.get("original_artist") or None
+    gap = row.get("gap_current")
     return SongSummary(
         slug=_safe_str(row.get("slug")),
         title=_safe_str(row.get("title")),
         artist=artist,
         original=is_original,
         times_played=_safe_int(row.get("times_played")),
+        gap=_safe_int(gap) if gap is not None else None,
     )
 
 
@@ -640,7 +642,8 @@ def build_server(
 
         Returns:
             JSON ``{"data": [SongSummary, ...]}``. Each SongSummary has
-            ``slug, title, artist, original, times_played``.
+            ``slug, title, artist, original, times_played, gap`` (gap =
+            shows since last play, null if never played).
 
         Idempotent. Example: ``search_songs("bridgeless", limit=5)``.
         """
