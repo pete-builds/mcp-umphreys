@@ -26,6 +26,7 @@ lifecycle (create / close) is the caller's responsibility.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from typing import Any
 
@@ -63,9 +64,9 @@ class VaultReader:
                     FROM   shows s
                     LEFT JOIN venues v ON v.slug = s.venue_slug
                     LEFT JOIN tours  t ON t.slug = s.tour_slug
-                    WHERE  s.date = $1::date
+                    WHERE  s.date = $1
                     """,
-                    date_or_id,
+                    dt.date.fromisoformat(date_or_id),
                 )
             else:
                 try:
@@ -91,13 +92,15 @@ class VaultReader:
             if show_row is None:
                 return None, []
 
-            show_date = str(show_row["date"])
+            # show_row["date"] is already a datetime.date from asyncpg; bind it
+            # directly (binding a str against a date column raises a DataError).
+            show_date = show_row["date"]
             setlist_rows: list[asyncpg.Record] = await conn.fetch(
                 """
                 SELECT se.set_number, se.set_type, se.position, se.song_slug,
                        se.song_name, se.transition, se.footnote
                 FROM   setlist_entries se
-                WHERE  se.show_date = $1::date
+                WHERE  se.show_date = $1
                 ORDER  BY se.position
                 """,
                 show_date,
@@ -318,8 +321,8 @@ class VaultReader:
             args.append(person_slug)
             idx += 1
         if show_date:
-            clauses.append(f"a.show_date = ${idx}::date")
-            args.append(show_date)
+            clauses.append(f"a.show_date = ${idx}")
+            args.append(dt.date.fromisoformat(show_date))
             idx += 1
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         args.append(limit)
