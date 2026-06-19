@@ -1,0 +1,51 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mcp-umphreys:
+    build: .
+    image: mcp-umphreys:0.1.0
+    container_name: mcp-umphreys
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16M
+    ports:
+      - "${MCP_PORT:-3717}:${MCP_PORT:-3717}"
+    env_file:
+      - .env
+    environment:
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "${MCP_PORT:-3717}"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      # Persist the opaque KV cache across restarts. Schema is one table:
+      # (endpoint, params_hash) -> raw_json + fetched_at. NOT a vault.
+      - mcp-umphreys-cache:/data
+    networks:
+      - default
+      # Join the umphreys-vault Postgres network so this server can reach the
+      # `postgres` container by name. The external network is created by the
+      # umphreys-vault docker-compose stack (default network naming). Joining
+      # it here is read-only — mcp-umphreys never writes to the vault.
+      - umphreys-vault
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "python", "-m", "mcp_umphreys.healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mcp-umphreys-cache:
+
+networks:
+  umphreys-vault:
+    external: true
+    name: umphreys-vault_default
