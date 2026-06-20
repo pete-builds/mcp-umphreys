@@ -303,3 +303,78 @@ class SlugValidation(BaseModel):
 
     valid: list[str] = Field(default_factory=list)
     unknown: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Catalog-wide statistics (powers a downstream public "Stats" page)
+# ---------------------------------------------------------------------------
+
+
+class TopSong(BaseModel):
+    """A song with its play count — used in the most-played leaderboard."""
+
+    model_config = _FROZEN
+
+    slug: str
+    title: str
+    times_played: int = 0
+
+
+class GapSong(BaseModel):
+    """A song that's been cold the longest — a bust-out candidate."""
+
+    model_config = _FROZEN
+
+    slug: str
+    title: str
+    gap_current: int
+    times_played: int = 0
+    last_played_date: str | None = None
+
+
+class DebutSong(BaseModel):
+    """A recently debuted song."""
+
+    model_config = _FROZEN
+
+    slug: str
+    title: str
+    debut_date: str | None = None
+    times_played: int = 0
+
+
+class LongShow(BaseModel):
+    """A show with an unusually high song count."""
+
+    model_config = _FROZEN
+
+    show_id: str
+    date: str
+    venue_name: str = ""
+    location: str = ""
+    song_count: int = 0
+
+
+class StatsOverview(BaseModel):
+    """Catalog-wide aggregate statistics across the whole Umphrey's corpus.
+
+    A single read-only roll-up the downstream game's public Stats page renders
+    as cards/tables. Aggregates that the per-song / per-show tools don't cover
+    (total shows, average songs per show, distinct-songs-played) are computed
+    here from the full setlist corpus.
+    """
+
+    model_config = _FROZEN
+
+    total_shows: int = 0
+    total_songs_tracked: int = 0
+    distinct_songs_played: int = 0
+    total_performances: int = 0
+    avg_songs_per_show: float = 0.0
+    first_show_date: str | None = None
+    last_show_date: str | None = None
+    most_played: list[TopSong] = Field(default_factory=list)
+    biggest_gaps: list[GapSong] = Field(default_factory=list)
+    rarest_songs: list[TopSong] = Field(default_factory=list)
+    recent_debuts: list[DebutSong] = Field(default_factory=list)
+    longest_shows: list[LongShow] = Field(default_factory=list)

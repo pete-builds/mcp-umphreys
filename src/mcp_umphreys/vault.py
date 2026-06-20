@@ -388,6 +388,114 @@ class VaultReader:
             )
 
     # ------------------------------------------------------------------
+    # Catalog-wide statistics (powers the downstream public Stats page)
+    # ------------------------------------------------------------------
+
+    async def stats_overview(self, top_n: int = 10) -> dict[str, Any]:
+        """Compute catalog-wide aggregate statistics in one batch.
+
+        Read-only. Returns a plain dict the server layer projects onto the
+        ``StatsOverview`` model. The per-list slices (most-played, biggest
+        gaps, rarest, recent debuts, longest shows) are each capped at
+        ``top_n``. Only shows that have at least one setlist row count toward
+        the show totals and the average, so future-dated upcoming shows (no
+        setlist yet) don't drag the average down.
+        """
+        capped = max(1, min(int(top_n), 50))
+        async with self._pool.acquire() as conn:
+            # Headline aggregates. ``played_shows`` counts distinct show dates
+            # that actually have setlist rows; the average uses that basis.
+            headline = await conn.fetchrow(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM songs) AS total_songs_tracked,
+                    (SELECT COUNT(DISTINCT song_slug)
+                       FROM setlist_entries
+                      WHERE song_slug IS NOT NULL) AS distinct_songs_played,
+                    (SELECT COUNT(*) FROM setlist_entries) AS total_performances,
+                    (SELECT COUNT(DISTINCT show_date)
+                       FROM setlist_entries) AS played_shows,
+                    (SELECT MIN(show_date) FROM setlist_entries) AS first_show_date,
+                    (SELECT MAX(show_date) FROM setlist_entries) AS last_show_date
+                """
+            )
+            most_played = await conn.fetch(
+                """
+                SELECT slug, title, times_played
+                  FROM songs
+                 WHERE times_played IS NOT NULL AND times_played > 0
+                 ORDER BY times_played DESC, title ASC
+                 LIMIT $1
+                """,
+                capped,
+            )
+            biggest_gaps = await conn.fetch(
+                """
+                SELECT slug, title, gap_current, times_played, last_play_date
+                  FROM songs
+                 WHERE gap_current IS NOT NULL
+                   AND times_played IS NOT NULL AND times_played > 0
+                 ORDER BY gap_current DESC, title ASC
+                 LIMIT $1
+                """,
+                capped,
+            )
+            rarest = await conn.fetch(
+                """
+                SELECT slug, title, times_played
+                  FROM songs
+                 WHERE times_played IS NOT NULL AND times_played > 0
+                 ORDER BY times_played ASC, title ASC
+                 LIMIT $1
+                """,
+                capped,
+            )
+            recent_debuts = await conn.fetch(
+                """
+                SELECT slug, title, debut_date, times_played
+                  FROM songs
+                 WHERE debut_date IS NOT NULL
+                 ORDER BY debut_date DESC, title ASC
+                 LIMIT $1
+                """,
+                capped,
+            )
+            longest_shows = await conn.fetch(
+                """
+                SELECT se.show_date AS date,
+                       s.show_id,
+                       v.name     AS venue_name,
+                       v.location AS location,
+                       COUNT(*)   AS song_count
+                  FROM setlist_entries se
+                  JOIN shows  s ON s.date = se.show_date
+                  LEFT JOIN venues v ON v.slug = s.venue_slug
+                 GROUP BY se.show_date, s.show_id, v.name, v.location
+                 ORDER BY song_count DESC, se.show_date DESC
+                 LIMIT $1
+                """,
+                capped,
+            )
+
+        played_shows = int(headline["played_shows"] or 0)
+        total_perf = int(headline["total_performances"] or 0)
+        avg = round(total_perf / played_shows, 1) if played_shows else 0.0
+        return {
+            "total_shows": played_shows,
+            "total_songs_tracked": int(headline["total_songs_tracked"] or 0),
+            "distinct_songs_played": int(headline["distinct_songs_played"] or 0),
+            "total_performances": total_perf,
+            "avg_songs_per_show": avg,
+            "first_show_date": headline["first_show_date"],
+            "last_show_date": headline["last_show_date"],
+            "most_played": [dict(r) for r in most_played],
+            "biggest_gaps": [dict(r) for r in biggest_gaps],
+            "rarest_songs": [dict(r) for r in rarest],
+            "recent_debuts": [dict(r) for r in recent_debuts],
+            "longest_shows": [dict(r) for r in longest_shows],
+        }
+
+    # ------------------------------------------------------------------
     # ETL health
     # ------------------------------------------------------------------
 
