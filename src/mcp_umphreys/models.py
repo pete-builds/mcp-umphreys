@@ -85,6 +85,14 @@ class SetlistEntry(BaseModel):
     song_title: str
     transition: str = ""  # ">", "->", "" (no segue)
     footnote: str = ""
+    # Source provenance. Authoritative ATU/vault rows keep the "atu" default so
+    # they serialize byte-for-byte as before; advisory X/Twitter-sourced rows
+    # merged in during the hot window set "x". Defaulted so the resolver and
+    # every existing constructor stay compatible.
+    provenance: str = "atu"
+    # True only for advisory (X-sourced) rows surfaced before ATU confirms them.
+    # The game decides what to do with advisory rows; the merge only flags them.
+    advisory: bool = False
 
 
 class Show(BaseModel):

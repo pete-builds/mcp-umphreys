@@ -329,6 +329,8 @@ _MODEL_KEYS = {
         "song_title",
         "transition",
         "footnote",
+        "provenance",
+        "advisory",
     },
     "SongGap": {"slug", "title", "times_played", "gap_current", "last_played_date"},
     "VenueShow": {"show_id", "date", "venue_name", "location", "tour_name"},

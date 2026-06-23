@@ -226,6 +226,78 @@ def _atu_show_full(rows: list[dict[str, Any]]) -> Show | None:
     )
 
 
+def _merge_x_setlist(
+    show: Show | None,
+    x_rows: list[dict[str, Any]],
+    min_conf: float,
+) -> Show | None:
+    """Merge advisory X/Twitter staging rows into a hot-window ``Show``.
+
+    Pure function (no DB, no network) so it is unit-testable in isolation.
+
+    Rules:
+
+    * ATU precedence: any ``song_slug`` already present in ``show.setlist`` is
+      authoritative — the matching X row is dropped.
+    * Confidence gate: X rows with ``confidence`` below ``min_conf`` are dropped.
+    * Surviving X rows are appended AFTER the existing setlist, ordered by
+      ``position_hint`` (nulls last, then slug), each as a ``SetlistEntry`` with
+      ``provenance="x"``, ``advisory=True``, positions continuing after the max
+      existing position. ``set_name`` is derived from ``set_number_hint`` using
+      the SAME mapping the ATU path uses (so ``"e"`` → ``"Encore"``).
+    * If ``show`` is None (ATU returned nothing), a minimal advisory-only Show is
+      built from the X rows alone so the gap-fill case surfaces. Returns None
+      only when there is neither a show nor any surviving X row.
+    """
+    existing = list(show.setlist) if show is not None else []
+    existing_slugs = {e.song_slug for e in existing}
+    max_pos = max((e.position for e in existing), default=0)
+
+    def _conf(row: dict[str, Any]) -> float:
+        c = _safe_float(row.get("confidence"))
+        return c if c is not None else 0.0
+
+    def _pos_key(row: dict[str, Any]) -> tuple[int, int, str]:
+        ph = row.get("position_hint")
+        if ph is None:
+            return (1, 0, _safe_str(row.get("song_slug")))
+        return (0, _safe_int(ph), _safe_str(row.get("song_slug")))
+
+    candidates = [
+        row
+        for row in x_rows
+        if _conf(row) >= min_conf
+        and _safe_str(row.get("song_slug"))
+        and _safe_str(row.get("song_slug")) not in existing_slugs
+    ]
+    candidates.sort(key=_pos_key)
+
+    appended: list[SetlistEntry] = []
+    next_pos = max_pos
+    for row in candidates:
+        next_pos += 1
+        appended.append(
+            SetlistEntry(
+                position=next_pos,
+                set_name=_set_label(row.get("set_number_hint")),
+                song_slug=_safe_str(row.get("song_slug")),
+                song_title=_safe_str(row.get("song_name")),
+                provenance="x",
+                advisory=True,
+            )
+        )
+
+    if show is None:
+        if not appended:
+            return None
+        date = _safe_str(x_rows[0].get("show_date")) if x_rows else ""
+        return Show(show_id="", date=date, venue=Venue(), setlist=appended)
+
+    if not appended:
+        return show
+    return show.model_copy(update={"setlist": [*existing, *appended]})
+
+
 def _atu_show_summary(rows: list[dict[str, Any]]) -> ShowSummary | None:
     """Build a ShowSummary from raw ATU setlist rows for one date."""
     if not rows:
@@ -466,6 +538,24 @@ def build_server(
                 return None
         return VaultReader(_lazy_pool_holder[0])
 
+    async def _read_x_staging(date_str: str) -> list[dict[str, Any]]:
+        """Read advisory X staging rows for a date, or [] if disabled/unavailable.
+
+        Honors ``x_merge_enabled``; degrades to [] on any vault error or a
+        missing reader so the advisory merge is purely additive and never breaks
+        the authoritative read path.
+        """
+        if not settings.x_merge_enabled:
+            return []
+        vr = await _get_vault_reader()
+        if vr is None:
+            return []
+        try:
+            return await vr.read_x_staging(date_str)
+        except Exception:
+            logger.exception("read_x_staging failed; skipping advisory merge")
+            return []
+
     def _is_hot_window(date_str: str) -> bool:
         """Return True if show date is within vault_hot_window_hours of now."""
         try:
@@ -577,6 +667,9 @@ def build_server(
         is_date = len(date_or_id) == 10 and date_or_id.count("-") == 2
 
         # Hot-window live read (date keys only — ATU is keyed by show date).
+        # Inside the hot window we may also splice in advisory X/Twitter rows
+        # from x_setlist_staging. Staging is read ONLY here, so outside the hot
+        # window it is ignored entirely and a bad X read can never persist.
         if is_date and _is_hot_window(date_or_id):
             try:
                 live_rows = await _cached_atu(
@@ -587,9 +680,18 @@ def build_server(
                 )
                 rows = live_rows if isinstance(live_rows, list) else []
                 show = _atu_show_full(rows)
+                x_rows = await _read_x_staging(date_or_id)
                 if show is not None:
-                    return _ok(show)
-                # No live rows yet (show not started): fall through to vault.
+                    # (a) ATU rows present: merge advisory X rows on top.
+                    merged = _merge_x_setlist(show, x_rows, settings.x_min_confidence)
+                    return _ok(merged if merged is not None else show)
+                # (b) ATU empty: if staging has rows, surface an advisory-only
+                # Show instead of falling through to a stale/absent vault row.
+                if x_rows:
+                    x_only = _merge_x_setlist(None, x_rows, settings.x_min_confidence)
+                    if x_only is not None:
+                        return _ok(x_only)
+                # No live rows and no advisory rows: fall through to vault.
             except ATUError:
                 logger.exception("live get_show failed; falling back to vault")
 

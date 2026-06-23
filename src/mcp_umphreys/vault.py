@@ -108,6 +108,36 @@ class VaultReader:
 
         return show_row, setlist_rows
 
+    async def read_x_staging(self, show_date: str) -> list[dict[str, Any]]:
+        """Return advisory X/Twitter staging rows for a show date as plain dicts.
+
+        Reads the ``x_setlist_staging`` table (advisory, X-sourced setlist rows
+        for live shows). Returns rows with at least ``song_slug, song_name,
+        set_number_hint, position_hint, confidence``, ordered by
+        ``position_hint`` (nulls last).
+
+        Degrades safely: if the migration that creates ``x_setlist_staging`` has
+        not been applied yet, asyncpg raises ``UndefinedTableError`` — we catch
+        it and return ``[]`` so the hot-window merge becomes a no-op rather than
+        failing the whole read.
+        """
+        try:
+            async with self._pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT song_slug, song_name, set_number_hint,
+                           position_hint, confidence
+                    FROM   x_setlist_staging
+                    WHERE  show_date = $1
+                    ORDER  BY position_hint ASC NULLS LAST, song_slug ASC
+                    """,
+                    dt.date.fromisoformat(show_date),
+                )
+        except asyncpg.UndefinedTableError:
+            logger.info("x_setlist_staging table absent; skipping advisory merge")
+            return []
+        return [dict(r) for r in rows]
+
     async def search_shows(
         self,
         year: int | None = None,

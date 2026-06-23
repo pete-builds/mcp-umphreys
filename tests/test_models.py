@@ -67,7 +67,21 @@ def test_setlist_entry_field_set() -> None:
         "song_title",
         "transition",
         "footnote",
+        "provenance",
+        "advisory",
     }
+
+
+def test_setlist_entry_provenance_defaults_keep_contract() -> None:
+    """New advisory fields default so existing ATU/vault rows serialize unchanged."""
+    entry = SetlistEntry(
+        position=1,
+        set_name="Set 1",
+        song_slug="all-in-time",
+        song_title="All In Time",
+    )
+    assert entry.provenance == "atu"
+    assert entry.advisory is False
 
 
 def test_show_field_set() -> None:

@@ -105,6 +105,29 @@ class Settings(BaseSettings):
             "than this many hours, so callers can detect a stuck pipeline."
         ),
     )
+    # ------------------------------------------------------------------
+    # Advisory X/Twitter staging merge (hot-window only)
+    # ------------------------------------------------------------------
+    x_merge_enabled: bool = Field(
+        default=True,
+        description=(
+            "If True, hot-window get_show reads merge advisory X/Twitter-sourced "
+            "rows from the x_setlist_staging vault table on top of (or in the "
+            "absence of) authoritative ATU rows. Staging is IGNORED entirely "
+            "outside the hot window, so a bad X read is never permanent."
+        ),
+    )
+    x_min_confidence: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum confidence (0-1) an x_setlist_staging row must carry to be "
+            "merged into a hot-window setlist. Lower-confidence advisory rows are "
+            "dropped."
+        ),
+    )
+
     pg_host: str = Field(default="postgres")
     pg_port: int = Field(default=5432, ge=1, le=65535)
     pg_db: str = Field(default="umphreys")
@@ -134,6 +157,8 @@ class Settings(BaseSettings):
             "vault_enabled": self.vault_enabled,
             "vault_hot_window_hours": self.vault_hot_window_hours,
             "vault_max_stale_hours": self.vault_max_stale_hours,
+            "x_merge_enabled": self.x_merge_enabled,
+            "x_min_confidence": self.x_min_confidence,
             "pg_host": self.pg_host,
             "pg_port": self.pg_port,
             "pg_db": self.pg_db,
