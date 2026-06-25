@@ -21,22 +21,22 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
-    "fastmcp==3.4.0",
+    "fastmcp==3.4.2",
     "httpx==0.28.1",
     "uvicorn==0.49.0",
     "python-dotenv==1.2.2",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     "aiosqlite==0.22.1",
     "asyncpg>=0.29",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.15.15",
+    "ruff==0.15.19",
     "mypy==2.1.0",
 ]
 
