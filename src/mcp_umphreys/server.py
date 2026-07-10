@@ -1,8 +1,8 @@
 """MCP Umphreys — wraps the umphreys-vault Postgres behind a typed tool surface.
 
-Twelve tools across four domains:
+Thirteen tools across four domains:
 
-* shows  — recent_shows, get_show, venue_history
+* shows  — recent_shows, search_shows, get_show, venue_history
 * songs  — search_songs, get_song, songs_by_gap, song_history, validate_song_slugs
 * native — jam_chart, appearances, stats_overview
 * meta   — health
@@ -641,6 +641,58 @@ def build_server(
 
         # Vault unavailable: serve whatever the live hot-window read produced.
         return _ok([live_summary] if live_summary is not None else [])
+
+    @mcp.tool()
+    async def search_shows(
+        year: int | None = None,
+        venue: str = "",
+        city: str = "",
+        state: str = "",
+        country: str = "",
+        limit: int = 25,
+    ) -> str:
+        """Search Umphrey's shows by year + venue + city/state/country.
+
+        All filters are optional and combine with AND semantics. Rows are
+        ordered newest-first (show date DESC), so a per-year sweep returns
+        every played AND announced-future date for that calendar year in one
+        call — the whole-tour lookup the downstream ``/shows`` archive needs to
+        resolve venue titles (a date-DESC ``recent_shows`` window misses the
+        earliest dates).
+
+        Args:
+            year: Four-digit year (e.g. ``2023``). Optional.
+            venue: Substring match against venue name.
+            city: Substring match against city.
+            state: Two-letter state/province abbreviation.
+            country: Country name (e.g. ``"USA"``).
+            limit: Max rows to return after filtering. Default 25, capped at 500.
+
+        Returns:
+            JSON ``{"data": [ShowSummary, ...]}``. Each ShowSummary has
+            ``show_id, date, venue_name, location, tour_name`` — byte-for-byte
+            the mcp-phish ``search_shows`` shape the downstream game parses.
+
+        Vault-only. Returns ``VAULT_DISABLED`` error if vault is not enabled.
+        Idempotent. Example: ``search_shows(year=2023, venue="Tabernacle", limit=5)``.
+        """
+        vr = await _get_vault_reader()
+        if vr is None:
+            return _err("search_shows requires vault (VAULT_ENABLED=true)", "VAULT_DISABLED")
+        capped = max(1, min(int(limit), 500))
+        try:
+            rows = await vr.search_shows(
+                year=year,
+                venue=venue,
+                city=city,
+                state=state,
+                country=country,
+                limit=capped,
+            )
+            return _ok([_vault_show_summary(row) for row in rows])
+        except Exception as exc:
+            logger.exception("search_shows failed")
+            return _err(str(exc), "VAULT_ERROR")
 
     @mcp.tool()
     async def get_show(date_or_id: str) -> str:

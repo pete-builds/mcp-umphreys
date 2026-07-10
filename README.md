@@ -19,6 +19,7 @@ Game-critical (shapes match the mcp-phish contract):
 |------|---------|-------|
 | `health()` | `Health` | Single `atu` upstream; cache + vault freshness. |
 | `recent_shows(limit=10)` | `[ShowSummary]` | Newest first. Hot-window newest show reads live. |
+| `search_shows(year=None, venue="", city="", state="", country="", limit=25)` | `[ShowSummary]` | Per-year sweep (played + announced-future), newest first. Powers the downstream `/shows` venue archive. |
 | `search_songs(query, limit=25)` | `[SongSummary]` | Title/alias ILIKE. |
 | `get_song(slug)` | `Song` | Field is **`gap`** (vault `gap_current` projected). |
 | `get_show(date_or_id)` | `Show` | `set_number=="e"` → `set_name=="Encore"`. Hot-window reads live ATU. |

@@ -357,6 +357,20 @@ async def test_contract_recent_shows_keys(vault_server: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_contract_search_shows_keys(vault_server: Any) -> None:
+    # The downstream /shows archive calls search_shows(year=..., limit=120)
+    # and reads row["date"] + row["venue_name"]/row["location"]. The row shape
+    # MUST match mcp-phish's ShowSummary byte-for-byte or wappy venues degrade
+    # to bare dates.
+    body = await _call(vault_server, "search_shows", year=2023, limit=120)
+    assert body["data"]
+    for row in body["data"]:
+        assert set(row) == _MODEL_KEYS["ShowSummary"]
+        assert row["date"]
+        assert row["venue_name"]
+
+
+@pytest.mark.asyncio
 async def test_contract_search_songs_keys(vault_server: Any) -> None:
     body = await _call(vault_server, "search_songs", query="bridgeless", limit=10)
     assert body["data"]
@@ -632,6 +646,7 @@ async def test_vault_disabled_tools_guard(stub_settings: Settings) -> None:
     server = _build(stub_settings)  # vault_enabled=False
     for tool, kwargs in (
         ("get_song", {"slug": "x"}),
+        ("search_shows", {"year": 2023}),
         ("search_songs", {"query": "x"}),
         ("songs_by_gap", {}),
         ("venue_history", {"venue_slug": "x"}),
