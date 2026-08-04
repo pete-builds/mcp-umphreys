@@ -21,19 +21,19 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
-    "fastmcp==3.4.0",
+    "fastmcp==3.4.5",
     "httpx==0.28.1",
-    "uvicorn==0.49.0",
+    "uvicorn==0.52.1",
     "python-dotenv==1.2.2",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     "aiosqlite==0.22.1",
     "asyncpg>=0.29",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     # 0.16.0 narrowed S310 so it no longer fires on a urlopen whose URL is an
@@ -41,8 +41,8 @@ dev = [
     # suppression healthcheck.py needs to satisfy 0.15.15 is reported as an
     # unused directive (RUF100) by any newer ruff, so the two versions cannot
     # both be satisfied by one source file.
-    "ruff==0.16.0",
-    "mypy==2.1.0",
+    "ruff==0.16.1",
+    "mypy==2.3.0",
 ]
 
 [project.scripts]
