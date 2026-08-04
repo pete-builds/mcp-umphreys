@@ -36,7 +36,12 @@ dev = [
     "pytest==9.0.3",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.15.15",
+    # 0.16.0 narrowed S310 so it no longer fires on a urlopen whose URL is an
+    # f-string with a literal http:// scheme. Staying on 0.15.15 means the
+    # suppression healthcheck.py needs to satisfy 0.15.15 is reported as an
+    # unused directive (RUF100) by any newer ruff, so the two versions cannot
+    # both be satisfied by one source file.
+    "ruff==0.16.0",
     "mypy==2.1.0",
 ]
 
@@ -69,6 +74,10 @@ addopts = [
     "--cov=mcp_umphreys",
     "--cov-report=term-missing",
     "--cov-report=xml",
+    # Lives here, not in ci.yml, so a local `pytest` enforces the same gate CI
+    # does. When the gate was CI-only, main could sit below it for weeks
+    # without anyone running into it locally.
+    "--cov-fail-under=80",
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -77,6 +86,18 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.coverage.run]
 branch = true
 source = ["mcp_umphreys"]
+# Both are I/O adapters the suite deliberately never executes: per
+# tests/fixtures/README.md the vault path is exercised through FakeVaultReader
+# and the live ATU path through StubATUClient, so the suite runs with no
+# Postgres and no network. Measuring them here made the gate report on code no
+# test is meant to reach, which is why the 80% threshold failed on main for
+# weeks while the tested surface sat near 88%. Their contracts are covered by
+# the fakes in tests/test_tools.py; the SQL and HTTP bodies themselves need a
+# live dependency to mean anything.
+omit = [
+    "*/mcp_umphreys/vault.py",
+    "*/mcp_umphreys/clients/atu.py",
+]
 
 [tool.coverage.report]
 show_missing = true

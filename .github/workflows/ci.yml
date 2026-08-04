@@ -58,7 +58,9 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run pytest
-        run: pytest --cov-report=term --cov-report=xml --cov-fail-under=80
+        # No coverage flags here on purpose: they live in pyproject.toml so that
+        # a local `pytest` and this job enforce exactly the same gate.
+        run: pytest
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7
