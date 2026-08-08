@@ -37,6 +37,7 @@ from mcp_umphreys.cache import ResponseCache
 from mcp_umphreys.clients.atu import ATUError
 from mcp_umphreys.clients.stubs import StubATUClient
 from mcp_umphreys.config import Settings, load_settings
+from mcp_umphreys.hotwindow import is_hot as hot_is_hot
 from mcp_umphreys.logging_setup import configure_logging
 from mcp_umphreys.models import (
     Appearance,
@@ -557,15 +558,8 @@ def build_server(
             return []
 
     def _is_hot_window(date_str: str) -> bool:
-        """Return True if show date is within vault_hot_window_hours of now."""
-        try:
-            show_dt = datetime.fromisoformat(date_str)
-            if show_dt.tzinfo is None:
-                show_dt = show_dt.replace(tzinfo=UTC)
-            age_hours = (datetime.now(tz=UTC) - show_dt).total_seconds() / 3600
-            return age_hours < settings.vault_hot_window_hours
-        except (ValueError, OverflowError):
-            return False
+        """Return True if the show should be read live (see mcp_umphreys.hotwindow)."""
+        return hot_is_hot(date_str, settings.vault_hot_window_hours, datetime.now(tz=UTC))
 
     mcp = FastMCP("Umphreys")
     started_at = time.time()
