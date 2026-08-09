@@ -64,7 +64,33 @@ ruff check . && mypy && pytest
 
 ## Deployment
 
-`docker compose up -d` builds the image and joins the external
+The image is published to GHCR by CI, not built on the host. `docker compose
+up -d` pulls the pinned version and joins the external
 `umphreys-vault_default` network so the server reaches the vault's `postgres`
 container by name. The opaque response cache persists in the
 `mcp-umphreys-cache` volume. Port **3717**.
+
+To cut a release:
+
+1. Bump the image tag in `docker-compose.yml` and commit it. The release
+   workflow refuses to publish if this disagrees with the git tag, which stops
+   a release from producing an image the compose does not reference.
+2. Tag and push:
+
+   ```bash
+   git tag -a v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
+   ```
+
+3. `.github/workflows/release.yml` builds `linux/amd64` and `linux/arm64`,
+   pushes to `ghcr.io/pete-builds/mcp-umphreys`, attaches an SBOM and a signed
+   provenance attestation, and cuts a GitHub release.
+
+4. On the host:
+
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
+
+The first deploy after switching from `build: .` to a pulled image is the one
+worth watching, since the host stops compiling the code it runs.
