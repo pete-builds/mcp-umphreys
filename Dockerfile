@@ -7,7 +7,7 @@
 #   docker pull python:3.13-slim
 #   docker inspect python:3.13-slim --format '{{index .RepoDigests 0}}'
 # Dependabot keeps it fresh weekly via .github/dependabot.yml.
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir --target /wheels .
 # ---------------------------------------------------------------------------
 # Runtime stage: slim image with only the installed package + UID 1000 user.
 # ---------------------------------------------------------------------------
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
