@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from mcp_umphreys import __version__
 from mcp_umphreys.cache import ResponseCache
@@ -569,6 +571,18 @@ def build_server(
 
     mcp = FastMCP("Umphreys")
     started_at = time.time()
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health_route(_request: Request) -> JSONResponse:
+        """Lightweight liveness endpoint for the Docker HEALTHCHECK.
+
+        A bare GET against ``/mcp`` makes the MCP SDK mint a transport
+        session before it returns 400/405/406, and nothing reaps it, leaking
+        ~40 KB per probe at the standard 30s interval. This route never
+        touches the ``/mcp`` transport, so gate the HEALTHCHECK on the 200
+        status code here, not the body.
+        """
+        return JSONResponse({"status": "ok"})
 
     async def _cached_atu(
         endpoint: str,
