@@ -7,7 +7,21 @@
 #   docker pull python:3.13-slim
 #   docker inspect python:3.13-slim --format '{{index .RepoDigests 0}}'
 # Dependabot keeps it fresh weekly via .github/dependabot.yml.
-FROM python:3.14-slim AS builder
+#
+# The TAG must stay 3.13: pyproject.toml (requires-python, mypy python_version,
+# ruff target-version), the CI matrix, and requirements.lock (compiled with
+# --python-version 3.13) all target 3.13. Moving the tag alone silently ships a
+# runtime that no lockfile or check ever exercised. Retarget all of them
+# together or not at all.
+#
+# This already happened once: a Dependabot *digest* bump carried the tag from
+# 3.13 to 3.14 and shipped Python 3.14.7 to production, dropping the digest pin
+# entirely on the way through. A digest is opaque, so the tag beside it gets
+# edited without reading as a version change. CI now asserts the built image's
+# Python minor version (see the build-image job in .github/workflows/ci.yml),
+# so that failure mode is loud rather than silent. If Dependabot proposes a
+# FROM line whose tag is not 3.13, close the PR.
+FROM python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS builder
 
 WORKDIR /build
 
@@ -29,7 +43,8 @@ RUN pip install --no-cache-dir --target /wheels --no-deps .
 # ---------------------------------------------------------------------------
 # Runtime stage: slim image with only the installed package + UID 1000 user.
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim AS runtime
+# Same pin as the builder stage. Keep both stages on the identical tag+digest.
+FROM python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
