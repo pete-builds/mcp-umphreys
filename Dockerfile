@@ -16,11 +16,15 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install from the hash-locked requirements.lock (uv pip compile --generate-hashes).
+# --require-hashes refuses anything that doesn't match a pinned sha256.
+COPY requirements.lock ./requirements.lock
+RUN pip install --no-cache-dir --require-hashes --target /wheels -r requirements.lock
+
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-# Install the package and its pinned dependencies into /wheels so the runtime
-# stage installs offline from a self-contained tree.
-RUN pip install --no-cache-dir --target /wheels .
+# Install the package itself (deps already satisfied above) into the same tree.
+RUN pip install --no-cache-dir --target /wheels --no-deps .
 
 # ---------------------------------------------------------------------------
 # Runtime stage: slim image with only the installed package + UID 1000 user.
