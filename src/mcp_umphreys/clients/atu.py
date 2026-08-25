@@ -118,8 +118,7 @@ class ATUClient:
                 return []
             if resp.status_code >= 400:
                 raise ATUError(
-                    f"ATU GET {path} returned {resp.status_code}"
-                    f"{_describe_error_body(resp)}"
+                    f"ATU GET {path} returned {resp.status_code}{_describe_error_body(resp)}"
                 )
             try:
                 body = resp.json()

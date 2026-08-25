@@ -30,9 +30,7 @@ def _resp(status: int, body: str, content_type: str) -> httpx.Response:
 
 def test_the_json_message_is_kept():
     body = json.dumps({"error": True, "message": "Invalid date format"})
-    assert _describe_error_body(_resp(400, body, "application/json")) == (
-        ": Invalid date format"
-    )
+    assert _describe_error_body(_resp(400, body, "application/json")) == (": Invalid date format")
 
 
 def test_an_html_outage_page_reports_its_shape_not_its_markup():
@@ -67,8 +65,7 @@ async def test_the_request_path_actually_uses_the_helper():
     html = "<html><body>All Things Umphrey's is down</body></html>"
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503, content=html.encode(),
-                              headers={"content-type": "text/html"})
+        return httpx.Response(503, content=html.encode(), headers={"content-type": "text/html"})
 
     client = ATUClient(throttle=TokenBucket(rps=100), base_url="https://atu.invalid/api/v2")
     await client.aclose()
