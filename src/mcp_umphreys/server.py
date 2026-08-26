@@ -654,6 +654,7 @@ def build_server(
                 if head_date and _is_hot_window(head_date):
                     live_summary = _atu_show_summary(rows)
 
+        vault_failed = False
         vr = await _get_vault_reader()
         if vr is not None:
             try:
@@ -666,8 +667,31 @@ def build_server(
                 return _ok(summaries)
             except Exception:
                 logger.exception("vault recent_shows failed; serving live-only")
+                vault_failed = True
+        else:
+            # _get_vault_reader returns None both when the vault is deliberately
+            # disabled and when the pool failed to create. vault_enabled defaults
+            # True, so in the shipped configuration this branch means an outage,
+            # not an operator choice.
+            vault_failed = settings.vault_enabled
 
-        # Vault unavailable: serve whatever the live hot-window read produced.
+        # Degrading to live-only is deliberate (this server can answer from the hot
+        # window alone). What was not deliberate is doing it SILENTLY: an empty list
+        # here is byte-identical to a successful lookup that found nothing, and
+        # live_summary only populates inside the hot window -- so during an outage on
+        # an ordinary non-show day this returned {"data": []} and the caller had no
+        # way to tell "no recent shows" from "the database is down".
+        #
+        # Every one of the other fourteen _get_vault_reader() call sites returns
+        # VAULT_DISABLED or VAULT_ERROR. recent_shows was the only one that did not.
+        if vault_failed and live_summary is None:
+            return _err(
+                "vault unavailable and no live show in the hot window; "
+                "cannot distinguish 'no recent shows' from a vault outage",
+                "VAULT_ERROR",
+            )
+
+        # Live data present, or the vault is genuinely disabled by configuration.
         return _ok([live_summary] if live_summary is not None else [])
 
     @mcp.tool(annotations=READ_ONLY)
