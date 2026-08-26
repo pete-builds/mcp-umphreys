@@ -21,10 +21,10 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 dependencies = [
-    "fastmcp==3.4.6",
+    "fastmcp==3.4.7",
     "httpx==0.28.1",
-    "uvicorn==0.52.1",
-    "python-dotenv==1.2.2",
+    "uvicorn==0.52.3",
+    "python-dotenv==1.2.3",
     "pydantic==2.13.4",
     "pydantic-settings==2.15.0",
     "aiosqlite==0.22.1",
@@ -41,8 +41,8 @@ dev = [
     # suppression healthcheck.py needs to satisfy 0.15.15 is reported as an
     # unused directive (RUF100) by any newer ruff, so the two versions cannot
     # both be satisfied by one source file.
-    "ruff==0.16.2",
-    "mypy==2.3.0",
+    "ruff==0.16.3",
+    "mypy==2.3.1",
 ]
 
 [project.scripts]
