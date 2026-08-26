@@ -30,6 +30,35 @@ from mcp_umphreys.throttle import TokenBucket
 log = logging.getLogger("mcp_umphreys.client.atu")
 
 
+def _describe_error_body(resp: httpx.Response) -> str:
+    """Describe an error body without pasting 300 raw characters into a result.
+
+    This message reaches a tool result, which goes straight into an agent's
+    context. ATU's own error shape is a JSON envelope with a ``message``, and
+    that is worth keeping. Anything else is not: an ATU outage serves an HTML
+    page, and 300 characters of markup tells an agent nothing it can act on
+    while filling the context it was meant to inform.
+
+    Nothing here is a credential concern, and it is worth saying so rather than
+    letting the fix imply otherwise: ATU is a public API and this client sends
+    no key at all, in the URL or anywhere else. This is context hygiene.
+    """
+    try:
+        payload = resp.json()
+    except Exception:
+        payload = None
+
+    if isinstance(payload, dict):
+        message = payload.get("message") or payload.get("error")
+        if isinstance(message, str) and message:
+            return f": {message[:200]}"
+
+    if not resp.text:
+        return ""
+    content_type = resp.headers.get("content-type", "unknown")
+    return f" (non-JSON body: {content_type}, {len(resp.text)} bytes)"
+
+
 class ATUError(RuntimeError):
     """Raised on a non-2xx response, transport failure, or ``error`` envelope."""
 
@@ -88,7 +117,9 @@ class ATUClient:
             if resp.status_code == 404:
                 return []
             if resp.status_code >= 400:
-                raise ATUError(f"ATU GET {path} returned {resp.status_code}: {resp.text[:300]}")
+                raise ATUError(
+                    f"ATU GET {path} returned {resp.status_code}{_describe_error_body(resp)}"
+                )
             try:
                 body = resp.json()
             except ValueError as exc:

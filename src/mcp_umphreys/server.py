@@ -127,6 +127,26 @@ def _set_label(set_number: Any, set_type: Any = None) -> str:
 # ---------------------------------------------------------------------------
 
 
+# --- Tool annotations ---
+# Nothing in an MCP manifest tells a client what a tool does before it calls
+# it. This server is unusual in the sweep for being uniformly read-only: every
+# tool answers a question about Umphrey's McGee shows and none of them writes
+# anything, anywhere. That is worth SAYING rather than leaving to be inferred,
+# because an unannotated read-only server and an unannotated server full of
+# delete tools are indistinguishable in the manifest.
+#
+# openWorldHint is True throughout: every tool reads the vault or the ATU API
+# over the network, so an answer can change between two identical calls.
+
+#: Reads only. Safe to repeat, safe to call speculatively.
+READ_ONLY = {
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+
+
 def _ok(data: Any) -> str:
     """Serialize a ``data`` payload. Pydantic models flatten via ``model_dump``."""
     return json.dumps({"data": _to_jsonable(data)}, indent=2, default=str)
@@ -598,7 +618,7 @@ def build_server(
     # Show tools
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def recent_shows(limit: int = 10) -> str:
         """List the most recent Umphrey's McGee shows, newest first.
 
@@ -634,6 +654,7 @@ def build_server(
                 if head_date and _is_hot_window(head_date):
                     live_summary = _atu_show_summary(rows)
 
+        vault_failed = False
         vr = await _get_vault_reader()
         if vr is not None:
             try:
@@ -646,11 +667,34 @@ def build_server(
                 return _ok(summaries)
             except Exception:
                 logger.exception("vault recent_shows failed; serving live-only")
+                vault_failed = True
+        else:
+            # _get_vault_reader returns None both when the vault is deliberately
+            # disabled and when the pool failed to create. vault_enabled defaults
+            # True, so in the shipped configuration this branch means an outage,
+            # not an operator choice.
+            vault_failed = settings.vault_enabled
 
-        # Vault unavailable: serve whatever the live hot-window read produced.
+        # Degrading to live-only is deliberate (this server can answer from the hot
+        # window alone). What was not deliberate is doing it SILENTLY: an empty list
+        # here is byte-identical to a successful lookup that found nothing, and
+        # live_summary only populates inside the hot window -- so during an outage on
+        # an ordinary non-show day this returned {"data": []} and the caller had no
+        # way to tell "no recent shows" from "the database is down".
+        #
+        # Every one of the other fourteen _get_vault_reader() call sites returns
+        # VAULT_DISABLED or VAULT_ERROR. recent_shows was the only one that did not.
+        if vault_failed and live_summary is None:
+            return _err(
+                "vault unavailable and no live show in the hot window; "
+                "cannot distinguish 'no recent shows' from a vault outage",
+                "VAULT_ERROR",
+            )
+
+        # Live data present, or the vault is genuinely disabled by configuration.
         return _ok([live_summary] if live_summary is not None else [])
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def search_shows(
         year: int | None = None,
         venue: str = "",
@@ -702,7 +746,7 @@ def build_server(
             logger.exception("search_shows failed")
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_show(date_or_id: str) -> str:
         """Get a single Umphrey's show with full setlist and venue.
 
@@ -767,7 +811,7 @@ def build_server(
                 return _err("vault read failed", "VAULT_ERROR")
         return _err(f"show not found: {date_or_id}", "NOT_FOUND")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def venue_history(venue_slug: str, limit: int = 25) -> str:
         """List all shows at a venue, most recent first. Requires vault.
 
@@ -799,7 +843,7 @@ def build_server(
     # Song tools
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def search_songs(query: str, limit: int = 25) -> str:
         """Search the Umphrey's song catalog by title fragment.
 
@@ -827,7 +871,7 @@ def build_server(
             logger.exception("search_songs failed", extra={"query": query})
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def get_song(slug: str) -> str:
         """Get a single song's catalog record (debut, last play, gap, total).
 
@@ -856,7 +900,7 @@ def build_server(
             logger.exception("get_song failed", extra={"slug": slug})
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def songs_by_gap(limit: int = 25) -> str:
         """List songs ordered by current gap (shows since last play), descending.
 
@@ -886,7 +930,7 @@ def build_server(
             logger.exception("songs_by_gap failed")
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def song_history(slug: str, limit: int = 50) -> str:
         """List every performance of a song, most-recent first.
 
@@ -914,7 +958,7 @@ def build_server(
             logger.exception("song_history failed", extra={"slug": slug})
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def validate_song_slugs(slugs: list[str]) -> str:
         """Partition a list of song slugs into ``valid`` and ``unknown``.
 
@@ -962,7 +1006,7 @@ def build_server(
     # Umphrey's-native tools
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def jam_chart(year: int | None = None, limit: int = 50) -> str:
         """Return ATU's jam-chart entries — editorially flagged notable jams.
 
@@ -987,7 +1031,7 @@ def build_server(
             logger.exception("jam_chart failed")
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def appearances(
         person_slug: str | None = None,
         show_date: str | None = None,
@@ -1022,7 +1066,7 @@ def build_server(
             logger.exception("appearances failed")
             return _err(str(exc), "VAULT_ERROR")
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def stats_overview(top_n: int = 10) -> str:
         """Catalog-wide Umphrey's statistics in one read-only roll-up.
 
@@ -1113,7 +1157,7 @@ def build_server(
     # Meta tool
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=READ_ONLY)
     async def health() -> str:
         """Report server status: stub mode, ATU throttle state, cache + vault.
 
