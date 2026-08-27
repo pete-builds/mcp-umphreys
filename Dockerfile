@@ -52,9 +52,20 @@ ENV PYTHONUNBUFFERED=1 \
     PATH=/app/site-packages/bin:$PATH
 
 # Apply current Debian security updates on top of the pinned Python base image.
+#
+# The ADD is not decoration and must stay directly above the RUN. CI builds with
+# `cache-from: type=gha`, and this RUN's cache key is just its command string,
+# which never changes, so buildkit serves this layer from cache indefinitely and
+# the "current security updates" above are whatever was current the day the
+# layer was FIRST built.
+#
+# trixie-security's Release file changes whenever a security update is
+# published, so ADDing it makes buildkit invalidate this layer exactly when
+# there is something new to install, and only then.
+ADD https://deb.debian.org/debian-security/dists/trixie-security/Release /tmp/debian-security-release
 RUN apt-get update \
     && apt-get upgrade -y \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /tmp/debian-security-release /var/lib/apt/lists/*
 
 # Non-root user with pinned UID 1000 (no shell, no home).
 RUN groupadd --system --gid 1000 mcp \
