@@ -23,7 +23,7 @@ classifiers = [
 dependencies = [
     "fastmcp==3.4.7",
     "httpx==0.28.1",
-    "uvicorn==0.52.3",
+    "uvicorn==0.52.4",
     "python-dotenv==1.2.3",
     "pydantic==2.13.4",
     "pydantic-settings==2.15.0",
@@ -41,7 +41,7 @@ dev = [
     # suppression healthcheck.py needs to satisfy 0.15.15 is reported as an
     # unused directive (RUF100) by any newer ruff, so the two versions cannot
     # both be satisfied by one source file.
-    "ruff==0.16.3",
+    "ruff==0.16.4",
     "mypy==2.3.1",
 ]
 
