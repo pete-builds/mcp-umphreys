@@ -41,7 +41,7 @@ dev = [
     # suppression healthcheck.py needs to satisfy 0.15.15 is reported as an
     # unused directive (RUF100) by any newer ruff, so the two versions cannot
     # both be satisfied by one source file.
-    "ruff==0.16.5",
+    "ruff==0.16.6",
     "mypy==2.3.1",
 ]
 
