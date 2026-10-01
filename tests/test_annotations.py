@@ -34,12 +34,12 @@ async def test_every_tool_is_read_only(tools):
     That is the point: the failure is a prompt to classify the new tool
     deliberately, not an obstacle to adding one.
     """
-    writes = [n for n, t in tools.items() if t.annotations.readOnlyHint is not True]
+    writes = [n for n, t in tools.items() if t.annotations.read_only_hint is not True]
     assert writes == []
 
 
 async def test_nothing_claims_to_be_destructive(tools):
-    destructive = [n for n, t in tools.items() if t.annotations.destructiveHint]
+    destructive = [n for n, t in tools.items() if t.annotations.destructive_hint]
     assert destructive == []
 
 
@@ -49,7 +49,7 @@ async def test_every_tool_declares_an_open_world(tools):
     Idempotent in the sense that matters here -- calling twice causes no extra
     effect -- but not closed-world, and the two are different claims.
     """
-    closed = [n for n, t in tools.items() if t.annotations.openWorldHint is not True]
+    closed = [n for n, t in tools.items() if t.annotations.open_world_hint is not True]
     assert closed == []
 
 
