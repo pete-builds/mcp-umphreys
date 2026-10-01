@@ -25,10 +25,12 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+import fastmcp
 from fastmcp import FastMCP
 from pydantic import BaseModel
 from starlette.requests import Request
@@ -71,6 +73,25 @@ if TYPE_CHECKING:
     import asyncpg
 
 logger = logging.getLogger("mcp_umphreys.server")
+
+#: Close a streamable-HTTP session after this long with no request in flight.
+#: A client that disconnects without a DELETE (a killed process, a dropped
+#: laptop lid) otherwise leaves its session and transport in memory forever.
+SESSION_IDLE_TIMEOUT_SECONDS = 1800.0
+_SESSION_IDLE_ENV = "FASTMCP_HTTP_SESSION_IDLE_TIMEOUT"
+
+
+def _apply_session_idle_timeout() -> None:
+    """Reap idle sessions after 30 minutes unless the operator chose otherwise.
+
+    The MCP SDK's session manager defaults to 1800 seconds, but FastMCP 4
+    always passes its own ``http_session_idle_timeout`` setting through, and
+    that setting defaults to None, which means never. Left alone, the server
+    never reaps a session. An explicit FASTMCP_HTTP_SESSION_IDLE_TIMEOUT
+    is already in the setting and is left untouched.
+    """
+    if _SESSION_IDLE_ENV not in os.environ:
+        fastmcp.settings.http_session_idle_timeout = SESSION_IDLE_TIMEOUT_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -1253,6 +1274,7 @@ def main() -> None:
     configure_logging(level=settings.log_level, fmt=settings.log_format)
     logger.info("MCP Umphreys starting", extra={"config": settings.safe_repr()})
     server = build_server(settings)
+    _apply_session_idle_timeout()
     server.run(
         transport="streamable-http",
         host=settings.mcp_host,
